@@ -16,8 +16,12 @@ class RatesHttpRoutes[F[_]: Sync](rates: RatesProgram[F]) extends Http4sDsl[F] {
   private[http] val prefixPath = "/rates"
 
   private val httpRoutes: HttpRoutes[F] = HttpRoutes.of[F] {
+    // Bug: Caught this too late during testing. Initially designed to just
+    //      pass-through all currencies and let one live fail. Assuming we 
+    //      need some try-catch block here to proper error handling
+    //
     case GET -> Root :? FromQueryParam(from) +& ToQueryParam(to) =>
-      rates.get(RatesProgramProtocol.GetRatesRequest(from, to)).flatMap(Sync[F].fromEither).flatMap { rate =>
+      rates.getRate(RatesProgramProtocol.GetRatesRequest(from, to)).flatMap(Sync[F].fromEither).flatMap { rate =>
         Ok(rate.asGetApiResponse)
       }
   }
