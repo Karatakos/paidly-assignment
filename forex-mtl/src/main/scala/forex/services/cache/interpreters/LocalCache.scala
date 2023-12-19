@@ -5,21 +5,18 @@ import forex.domain.{ Rate }
 
 import com.typesafe.scalalogging.LazyLogging
 
-import cats.{Monad}
-//import cats.syntax.applicative._
-//import cats.syntax.either._
+import cats.Applicative
 import cats.implicits._
 
 import java.time.OffsetDateTime
 
-class LocalCache[F[_]: Monad](defaultExpiryMins: Int = 5) extends LazyLogging with Algebra[F]{
+class LocalCache[F[_]: Applicative](defaultExpiryMins: Int = 5) extends LazyLogging with Algebra[F]{
   private var cache: Map[String, Rate] = Map()
 
   override def add(rate: Rate): F[Unit]  = {
     val reciprocal = rate.reciprocal()
 
-    // Debt: This is really dirty. What I should do here is use State {}
-    // by adding F[_]: State requirement for LocalCache.
+    // Debt: This is really dirty. Should use State or an external solution
     //
     cache = cache + (rate.pair.toString -> rate)
     cache = cache + (reciprocal.pair.toString -> reciprocal)
