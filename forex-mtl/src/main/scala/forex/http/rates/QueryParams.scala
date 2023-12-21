@@ -1,9 +1,12 @@
 package forex.http.rates
 
 import forex.domain.Currency
+
 import org.http4s.{ QueryParamDecoder, ParseFailure }
 import org.http4s.dsl.impl.ValidatingQueryParamDecoderMatcher
+
 import scala.util.Try
+
 import cats.data.Validated
 
 object QueryParams {

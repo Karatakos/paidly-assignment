@@ -41,6 +41,8 @@ class Program[F[_]: Monad](
           rates <- EitherT(ratesService.getRates(pairs)).leftMap(toProgramError)
           rate <- EitherT.fromOptionF({
                     rates.foreach(rate => cacheService.add(rate))
+                    // Bug: And if it's not found!?!
+                    //
                     rates.find(_.pair == pair)}.pure[F],
                     Error.RateLookupFailed(s"Could not add $pair to cache"): Error)
         } yield rate).value
