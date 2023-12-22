@@ -10,19 +10,34 @@ import cats.implicits._
 
 import java.time.OffsetDateTime
 
+import scala.collection.concurrent.TrieMap
+
 class LocalCache[F[_]: Applicative](defaultExpiryMins: Int = 5) extends LazyLogging with Algebra[F]{
-  private var cache: Map[String, Rate] = Map()
+  // Needed something mutable and concurrency friendly
+  // https://www.scala-lang.org/api/2.12.8/scala/collection/concurrent/TrieMap.html 
+  //
+  private val cache: TrieMap[String, Rate] = TrieMap()
 
   override def add(rate: Rate): F[Unit]  = {
     val reciprocal = rate.reciprocal()
 
-    // Debt: This is really dirty. Should use State or an external solution
-    //
-    cache = cache + (rate.pair.toString -> rate)
-    cache = cache + (reciprocal.pair.toString -> reciprocal)
+    addOrUpdate(rate)
+    addOrUpdate(reciprocal)
 
-    logger.info(s"Adding live rate to cache for requested pair ${rate.pair} as well as it's reciprocal (calculated) ${reciprocal.pair}")
-  
+    logger.info(s"Adding or updating live rate ${rate.pair} to cache as well as it's reciprocal ${reciprocal.pair}") 
+    
+    ().pure[F]
+  }
+
+  private def addOrUpdate(rate: Rate): F[Unit] = {
+    val key = rate.pair.toString
+    val value = rate
+
+    if (cache.contains(key)) 
+      cache -= key
+
+    cache += (key -> value)
+
     ().pure[F]
   }
 
@@ -38,7 +53,9 @@ class LocalCache[F[_]: Applicative](defaultExpiryMins: Int = 5) extends LazyLogg
   }
    
   override def getPairs(): F[List[Rate.Pair]] = {
-    logger.info(s"Fetching all registered pairs from the cache (excludes reciprocal pairs)")
+    // Debt: Are these statements supposed to be captured as side effects via F?
+    //
+    logger.info(s"Fetching all registered pairs from the cache excluding reciprocals")
 
     cache
       .values

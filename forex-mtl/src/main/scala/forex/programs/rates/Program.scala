@@ -28,7 +28,6 @@ class Program[F[_]: Monad](
   }
 
   private def getLiveRateAndRefreshCache(pair: Rate.Pair): F[Either[Error, Rate]] = {
-
     // Debt: Not clean. Not sure how I can combine in a single for-comprehension
     // since cacheService.getPairs() doesnt need to return an Either. Could
     // box it into an either but that seems just as bad
@@ -38,13 +37,11 @@ class Program[F[_]: Monad](
         val pairs = pair :: list
 
         (for {
-          rates <- EitherT(ratesService.getRates(pairs)).leftMap(toProgramError)
+          rates <- EitherT(ratesService.getRates(pairs)).leftMap(toProgramError(_))
           rate <- EitherT.fromOptionF({
                     rates.foreach(rate => cacheService.add(rate))
-                    // Bug: And if it's not found!?!
-                    //
                     rates.find(_.pair == pair)}.pure[F],
-                    Error.RateLookupFailed(s"Could not add $pair to cache"): Error)
+                    Error.RateLookupFailed(s"Could not find a live rate for $pair"): Error)
         } yield rate).value
       }
     }

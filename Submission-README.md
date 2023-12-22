@@ -15,6 +15,8 @@ Assumptions validated via a couple of spikes.
 
 ### Solution 
 
+**Edit**: I incorrectly solved without a fixed currency limit in mind, it was only later I notcied the currency domain object with 10 fixed currencies. In retrospect, we could optimize by leveraring this.
+
 Based on 1440 min in 24 hrs with cached pairs expiring after 5 mins we will make 1400 / 5 = 288 requests p/ 24 hrs with all 128 currencies in a single request. Since it will take 128 requests to fill the cache, we will make 288 + 128 = **416 requests p/ 24 hrs** and only 288 requests p/ 24 hrs for subsequent days as long as the cache remains active.
 
 #### Algorithm
@@ -25,11 +27,6 @@ Based on 1440 min in 24 hrs with cached pairs expiring after 5 mins we will make
 1. Else fetch requested rate + all additional rates in the cache via a single query
 1. Calcualte the inverse rate at 1/rate and add both to cache, e.g. USDJPY and JPYUSD
 1. Issue rate from cache
-
-## Issues & Design Decisions
-
-1. I incorreclty designed without a fixed constraint on currencies, i.e. if we get a rate from one-frame it's valid. Only late on in the assignment did I notice Currency.scala.
-1. It was not easy at first figuring out what level of abstraction goes where for this pattern. After some research it looks like Tagless Final and so that's where i focused -- treating DSL's similar to repos and Program's similar to commands from CQRS. It was a choice between a single service which is cache aware, or two services composed by the program. The later seemed more logical so cache implementation could switch out for a distributed cache like Redis or Elasticache in production.
 
 ## Run and Test
 

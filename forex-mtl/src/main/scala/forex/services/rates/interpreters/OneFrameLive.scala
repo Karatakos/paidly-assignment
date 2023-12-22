@@ -17,7 +17,6 @@ import io.circe.generic.semiauto._
 import org.http4s._
 import org.http4s.client.Client
 import org.http4s.circe._
-import org.http4s.implicits._
 
 import org.typelevel.ci.CIString
 
@@ -41,21 +40,13 @@ class OneFrameLive[F[_]: ConcurrentEffect](
   extends LazyLogging with Algebra[F] {
 
   override def getRates(pairs: List[Rate.Pair]): F[Either[Error, List[Rate]]] = {
-    /*val req = 
-    (for {
-     uri <- Uri.fromString(s"${config.endpoint}/rates")
-    } yield uri)*/
-
-    val uri = uri"http://localhost:3000/rates?pair=USDJPY"
-
     logger.info(s"Fetching live rates for all registered pairs from the One Frame service.")
 
-    // TODO: Replace with Logger middleware
+    // TODO: Add Logger middleware for logging req & res
     //       https://http4s.org/v1/docs/server-middleware.html#requestlogger-responselogger-logger 
-    //
-    logger.info(s"GET: ${uri}")
 
     (for {
+      uri <- EitherT(buildUri(pairs))
       oneframeRates <- EitherT(get(uri))
       rates <- EitherT({
         oneframeRates
@@ -82,12 +73,42 @@ class OneFrameLive[F[_]: ConcurrentEffect](
       headers = Headers(
         List(
           Header.Raw(CIString("Accept"), "application/json"), 
-          Header.Raw(CIString("token"), config.token))))
+          // Security: Need secret storage for config.token
+          //
+          Header.Raw(CIString("token"), config.token))))     
 
-    // Bug: Will throw on unhappy path such as uxepcted response 
-    //      should handle these gracefully, e.g. currency unsupported, forbidden, etc.
-    //
-    client.expect[List[OneFrameRate]](req).flatMap{ _.asRight[Error].pure[F] }
+    client.expect[List[OneFrameRate]](req)
+      .redeem (
+        error => {
+          logger.error(error.getMessage, error)
+          
+          // Bug: Client will throw anyway
+          //
+          error
+            .asLeft[List[OneFrameRate]]
+            .leftMap(e => Error.OneFrameLookupFailed(e.getMessage): Error)
+        },
+        value => { value.asRight[Error] }
+      )
+  }
+
+  private def buildUri(pairs: List[Rate.Pair]): F[Either[Error, Uri]] = {
+    val forPath = s"${config.endpoint}/rates" 
+    val withQueryParams =
+      pairs
+        .map(pair => s"&pair=${pair.from}${pair.to}")
+        // Note: Tried reducing into a Uri via withQueryParams for a cleaner solution
+        //       but it would only spit out a single distint pair. 
+        //
+        .reduce((acc, str) => acc + str)
+        .drop(1)
+    
+    val uriStr = s"$forPath?$withQueryParams"
+
+    val uri = Uri.fromString(uriStr)
+      .leftMap(e => Error.OneFrameLookupFailed(e.getMessage): Error)
+
+    uri.pure[F]
   }
 
 }
